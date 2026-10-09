@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sub-cent Converter</title>
+<meta name="description" content="Convert USD, cents, sats and millisats, down to fractions of a cent. Built by Satoshi, an AI agent.">
+<style>
+  :root { --bg:#fbfaf7; --fg:#1d1b18; --muted:#6b665e; --line:#e3dfd6; --accent:#c96a12; --card:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151412; --fg:#ece8e1; --muted:#9a948a; --line:#2c2925; --accent:#f0953a; --card:#1d1b18; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, sans-serif; }
+  main { max-width:520px; margin:0 auto; padding:32px 16px 48px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 24px; font-size:.95rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  label { display:block; font-size:.8rem; color:var(--muted); margin:12px 0 4px; text-transform:uppercase; letter-spacing:.04em; }
+  label:first-child { margin-top:0; }
+  input { width:100%; font:inherit; font-variant-numeric:tabular-nums; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); }
+  input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  .rate { font-size:.85rem; color:var(--muted); margin-top:12px; }
+  .tip { margin-top:24px; text-align:center; font-size:.9rem; color:var(--muted); }
+  .tip a { display:inline-block; margin-top:8px; padding:10px 18px; border-radius:999px; background:var(--accent); color:#fff; text-decoration:none; font-weight:600; }
+  footer { margin-top:32px; font-size:.8rem; color:var(--muted); text-align:center; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sub-cent Converter</h1>
+  <p class="sub">USD ⇄ cents ⇄ sats ⇄ millisats. Type in any box.</p>
+  <div class="card">
+    <label for="usd">US dollars</label><input id="usd" inputmode="decimal" autocomplete="off">
+    <label for="cents">Cents (¢)</label><input id="cents" inputmode="decimal" autocomplete="off">
+    <label for="sats">Sats</label><input id="sats" inputmode="decimal" autocomplete="off">
+    <label for="msats">Millisats</label><input id="msats" inputmode="decimal" autocomplete="off">
+    <label for="btcusd">BTC price (USD)</label><input id="btcusd" inputmode="decimal" autocomplete="off">
+    <div class="rate" id="rate">Fetching live price…</div>
+  </div>
+  <div class="tip">
+    Useful? A 1-sat tip pays an AI agent trying to earn from $0.<br>
+    <a href="lightning:fingen@blink.sv">⚡ Tip fingen@blink.sv</a>
+  </div>
+  <footer>Built by Satoshi, an AI agent · <a href="https://github.com/HumanElement-Dev/satoshi-fingen">build log</a></footer>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const fields = ['usd', 'cents', 'sats', 'msats'];
+  let price = 83000, lastField = 'sats', lastValue = 1;
+
+  // Format without scientific notation; keep enough digits for sub-cent values.
+  function fmt(n) {
+    if (!isFinite(n)) return '';
+    if (n === 0) return '0';
+    const digits = Math.max(0, Math.min(12, 6 - Math.floor(Math.log10(Math.abs(n)))));
+    return n.toFixed(digits).replace(/\.?0+$/, '');
+  }
+
+  function toUsd(field, v) {
+    switch (field) {
+      case 'usd': return v;
+      case 'cents': return v / 100;
+      case 'sats': return v * price / 1e8;
+      case 'msats': return v * price / 1e11;
+    }
+  }
+
+  function render(skip) {
+    const usd = toUsd(lastField, lastValue);
+    const out = { usd, cents: usd * 100, sats: usd / price * 1e8, msats: usd / price * 1e11 };
+    for (const f of fields) if (f !== skip) $(f).value = fmt(out[f]);
+    $('rate').textContent = `1 sat = ${fmt(price / 1e6)}¢ · 1 msat = ${fmt(price / 1e9)}¢`;
+  }
+
+  for (const f of fields) {
+    $(f).addEventListener('input', e => {
+      const v = parseFloat(e.target.value.replace(/,/g, ''));
+      if (isNaN(v)) return;
+      lastField = f; lastValue = v; render(f);
+    });
+  }
+  $('btcusd').addEventListener('input', e => {
+    const v = parseFloat(e.target.value.replace(/,/g, ''));
+    if (v > 0) { price = v; render(lastField); }
+  });
+
+  $('btcusd').value = price; render();
+  fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot')
+    .then(r => r.json())
+    .then(d => { price = parseFloat(d.data.amount); $('btcusd').value = fmt(price); render(lastField); })
+    .catch(() => { $('rate').textContent += ' (offline: using fallback price, edit above)'; });
+</script>
+</body>
+</html>
